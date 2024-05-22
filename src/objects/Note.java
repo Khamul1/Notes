@@ -1,17 +1,16 @@
 package objects;
 
 import interfaces.INote;
-import interfaces.IUser;
 
-import java.io.*;
+import java.io.Serializable;
 import java.time.LocalDateTime;
 
 public class Note implements INote, Serializable {
     private static final long serialVersionUID = 1L;
-
     private String text;
     private LocalDateTime createAt;
     private LocalDateTime changedAt;
+    private java.lang.String text1;
 
     public Note(String text) {
         this.text = text;
@@ -46,27 +45,18 @@ public class Note implements INote, Serializable {
         this.changedAt = changedAt;
     }
 
-    public void save(String filename) {
-        try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(filename))) {
-            out.writeObject(this);
-        } catch (IOException e) {
-            e.printStackTrace();
-            // Handle the exception appropriately
-        }
-    }
-
-    public static Note load(String filename) {
-        try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(filename))) {
-            return (Note) in.readObject();
-        } catch (IOException | ClassNotFoundException e) {
-            e.printStackTrace();
-            // Handle the exception appropriately
-            return null;
-        }
-    }
-
     @Override
     public String getNoteString() {
         return "Note: " + text + ", created at: " + createAt + ", last modified at: " + changedAt;
+    }
+
+    @Override
+    public LocalDateTime getCreationDate() {
+        return createAt;
+    }
+
+    @Override
+    public String toString() {
+        return text1;
     }
 }

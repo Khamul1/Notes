@@ -3,8 +3,6 @@ package objects;
 import interfaces.INote;
 import interfaces.IUser;
 
-import javax.swing.*;
-import java.awt.event.ActionEvent;
 import java.io.*;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -30,9 +28,10 @@ public class User implements IUser, Serializable {
     }
 
     @Override
-    public void createNote(String text) {
-        Note note = new Note(text);
+    public INote createNote(String text) {
+        INote note = new Note(text);
         notes.add(note);
+        return note;
     }
 
     @Override
@@ -50,24 +49,18 @@ public class User implements IUser, Serializable {
         return Collections.unmodifiableList(notes);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public void loadNotesFromFile(String filename) {
+    public void loadNotesFromFile(String filename) throws IOException, ClassNotFoundException {
         try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(filename))) {
-            List<INote> loadedNotes = (List<INote>) ois.readObject();
-            notes.addAll(loadedNotes);
-        } catch (IOException | ClassNotFoundException e) {
-            // Обработка ошибок чтения или преобразования объекта
-            System.err.println("Ошибка при загрузке заметок из файла: " + e.getMessage());
+            notes = (List<INote>) ois.readObject();
         }
     }
 
     @Override
-    public void saveNotesToFile(String filename) {
+    public void saveNotesToFile(String filename) throws IOException {
         try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(filename))) {
             oos.writeObject(notes);
-        } catch (IOException e) {
-            // Обработка ошибок записи
-            System.err.println("Ошибка при сохранении заметок в файл: " + e.getMessage());
         }
     }
 }

@@ -4,6 +4,7 @@ import interfaces.INote;
 import interfaces.INoteManager;
 import interfaces.IUser;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,5 +54,10 @@ public class NoteManager implements INoteManager {
             return user.getNotes();
         }
         return null;
+    }
+
+    @Override
+    public List<IUser> getUsers() {
+        return new ArrayList<>(users.values());
     }
 }
