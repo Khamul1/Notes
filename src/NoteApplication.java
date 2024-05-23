@@ -4,12 +4,18 @@ import interfaces.IUser;
 import objects.Note;
 import objects.NoteManager;
 import objects.User;
-
+import org.jsoup.Jsoup;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
-import javax.swing.text.*;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.Document;
+import javax.swing.text.Element;
+import javax.swing.text.SimpleAttributeSet;
+import javax.swing.text.html.HTML;
+import javax.swing.text.html.HTMLDocument;
+import javax.swing.text.html.HTMLEditorKit;
 import java.awt.*;
 import java.io.File;
 import java.io.IOException;
@@ -24,7 +30,37 @@ public class NoteApplication extends JFrame {
     private IUser currentUser;
     private JComboBox<String> userComboBox;
     private JList<INote> notesList;
-    private JTextPane noteTextArea; // Используем JTextPane
+    private JTextPane noteTextArea;
+    private JScrollPane listScrollPane;
+    private JScrollPane textScrollPane;
+    private JToolBar toolbar;
+    private JPanel listPanel;
+
+    // DocumentListener как поле класса
+    private final DocumentListener noteTextAreaListener = new DocumentListener() {
+        @Override
+        public void insertUpdate(DocumentEvent e) {
+            updateSelectedNote();
+        }
+
+        @Override
+        public void removeUpdate(DocumentEvent e) {
+            updateSelectedNote();
+        }
+
+        @Override
+        public void changedUpdate(DocumentEvent e) {
+            updateSelectedNote();
+        }
+
+        private void updateSelectedNote() {
+            int selectedIndex = notesList.getSelectedIndex();
+            if (selectedIndex >= 0) {
+                INote selectedNote = currentUser.getNotes().get(selectedIndex);
+                selectedNote.setText(noteTextArea.getText());
+            }
+        }
+    };
 
     public NoteApplication(INoteManager noteManager) {
         super("Note Application");
@@ -32,7 +68,6 @@ public class NoteApplication extends JFrame {
 
         createInitialData();
         createApplicationLayout();
-
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         pack();
         setLocationRelativeTo(null);
@@ -53,13 +88,15 @@ public class NoteApplication extends JFrame {
         JPanel mainPanel = new JPanel(new BorderLayout());
         mainPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
 
-        JPanel listPanel = new JPanel(new BorderLayout());
+        listPanel = new JPanel(new BorderLayout());
         listPanel.add(userComboBox, BorderLayout.NORTH);
-        listPanel.add(new JScrollPane(notesList), BorderLayout.CENTER);
-        mainPanel.add(listPanel, BorderLayout.WEST);
+        listPanel.add(listScrollPane, BorderLayout.CENTER);
 
-        mainPanel.add(new JScrollPane(noteTextArea), BorderLayout.CENTER);
-        add(mainPanel);
+        mainPanel.add(listPanel, BorderLayout.WEST);
+        mainPanel.add(textScrollPane, BorderLayout.CENTER);
+
+        add(toolbar, BorderLayout.NORTH);
+        add(mainPanel, BorderLayout.CENTER);
 
         setPreferredSize(new Dimension(1280, 960));
     }
@@ -90,45 +127,22 @@ public class NoteApplication extends JFrame {
                 noteTextArea.setText(selectedNote.getText());
             }
         });
-        JScrollPane listScrollPane = new JScrollPane(notesList);
-        listScrollPane.setPreferredSize(new Dimension(300, 400));
+        listScrollPane = createScrollPane(notesList);
     }
 
     private void createNoteTextArea() {
-        noteTextArea = new JTextPane(); // Инициализируем JTextPane
-        noteTextArea.setContentType("text/html"); // Устанавливаем тип контента HTML
-        noteTextArea.getDocument().addDocumentListener(new DocumentListener() {
-            @Override
-            public void insertUpdate(DocumentEvent e) {
-                updateSelectedNote();
-            }
+        noteTextArea = new JTextPane();
+        noteTextArea.setEditorKit(new HTMLEditorKit());
+        noteTextArea.setContentType("text/html");
+        noteTextArea.setDocument(new HTMLDocument());
+        noteTextArea.getDocument().addDocumentListener(noteTextAreaListener);
 
-            @Override
-            public void removeUpdate(DocumentEvent e) {
-                updateSelectedNote();
-            }
-
-            @Override
-            public void changedUpdate(DocumentEvent e) {
-                updateSelectedNote();
-            }
-
-            private void updateSelectedNote() {
-                int selectedIndex = notesList.getSelectedIndex();
-                if (selectedIndex >= 0) {
-                    INote selectedNote = currentUser.getNotes().get(selectedIndex);
-                    selectedNote.setText(noteTextArea.getText());
-                }
-            }
-        });
-        JScrollPane textScrollPane = new JScrollPane(noteTextArea);
-        textScrollPane.setPreferredSize(new Dimension(500, 400));
+        textScrollPane = createScrollPane(noteTextArea);
     }
 
     private void createToolbar() {
-        JToolBar toolbar = new JToolBar();
+        toolbar = new JToolBar();
 
-        // Кнопки для работы с заметками
         JButton newButton = new JButton("New");
         newButton.addActionListener(e -> createNewNote());
         toolbar.add(newButton);
@@ -149,70 +163,121 @@ public class NoteApplication extends JFrame {
         loadButton.addActionListener(e -> loadNotes());
         toolbar.add(loadButton);
 
-        // Кнопки форматирования текста
         JButton boldButton = new JButton("B");
-        boldButton.addActionListener(e -> wrapSelectedText("<b>", "</b>"));
+        boldButton.addActionListener(e -> wrapSelectedText("<span style=\"font-weight: bold;\">", "</span>"));
         toolbar.add(boldButton);
 
         JButton italicButton = new JButton("I");
-        italicButton.addActionListener(e -> wrapSelectedText("<i>", "</i>"));
+        italicButton.addActionListener(e -> wrapSelectedText("<span style=\"font-style: italic;\">", "</span>"));
         toolbar.add(italicButton);
 
-        // Выбор шрифта
         JComboBox<String> fontComboBox = new JComboBox<>(GraphicsEnvironment.getLocalGraphicsEnvironment().getAvailableFontFamilyNames());
+        JComboBox<Integer> fontSizeComboBox = new JComboBox<>(new Integer[]{8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24});
+
         fontComboBox.addActionListener(e -> {
             String selectedFont = (String) fontComboBox.getSelectedItem();
-            if (selectedFont != null) {
-                changeFontStyle("font-family: " + selectedFont + ";");
+            Integer selectedSize = (Integer) fontSizeComboBox.getSelectedItem();
+            if (selectedFont != null && selectedSize != null) {
+                changeFontStyle("font-family", selectedFont);
+                changeFontStyle("font-size", selectedSize + "pt");
             }
         });
         toolbar.add(fontComboBox);
 
-        // Выбор размера шрифта
-        JComboBox<Integer> fontSizeComboBox = new JComboBox<>(new Integer[]{8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24});
-        fontSizeComboBox.addActionListener(e -> {
-            Integer selectedSize = (Integer) fontSizeComboBox.getSelectedItem();
-            if (selectedSize != null) {
-                changeFontStyle("font-size: " + selectedSize + "pt;");
-            }
-        });
-        toolbar.add(fontSizeComboBox);
-
-        // Кнопка вставки изображения
         JButton imageButton = new JButton("Image");
         imageButton.addActionListener(e -> insertImage());
         toolbar.add(imageButton);
 
-        add(toolbar, BorderLayout.NORTH);
+        fontSizeComboBox.addActionListener(e -> {
+            Integer selectedSize = (Integer) fontSizeComboBox.getSelectedItem();
+            if (selectedSize != null) {
+                changeFontStyle("font-size", selectedSize + "pt");
+            }
+        });
+        toolbar.add(fontSizeComboBox);
     }
 
-    // Метод для выделения текста тегами
     private void wrapSelectedText(String startTag, String endTag) {
         try {
             int start = noteTextArea.getSelectionStart();
             int end = noteTextArea.getSelectionEnd();
-            String selectedText = noteTextArea.getDocument().getText(start, end - start);
-            noteTextArea.getDocument().insertString(end, endTag, null);
-            noteTextArea.getDocument().insertString(start, startTag, null);
+            if (start != end) {
+                HTMLDocument doc = (HTMLDocument) noteTextArea.getDocument();
+                String selectedText = doc.getText(start, end - start);
+
+
+                boolean hasStartTag = selectedText.contains(startTag);
+                boolean hasEndTag = selectedText.contains(endTag);
+
+                if (hasStartTag && hasEndTag) {
+                    selectedText = selectedText.replaceAll(startTag, "");
+                    selectedText = selectedText.replaceAll(endTag, "");
+                    doc.remove(start, end - start);
+                    doc.insertString(start, selectedText, null);
+                } else if (!hasStartTag && !hasEndTag) {
+                    doc.insertString(end, endTag, null);
+                    doc.insertString(start, startTag, null);
+                } else {
+                    if (hasStartTag) {
+                        doc.remove(start, startTag.length());
+                    } else {
+                        doc.insertString(end, endTag, null);
+                    }
+                }
+            }
         } catch (BadLocationException ex) {
             ex.printStackTrace();
         }
     }
 
-    // Метод для изменения стиля текста
-    private void changeFontStyle(String style) {
+
+    private void changeFontStyle(String styleAttribute, String styleValue) {
         try {
             int start = noteTextArea.getSelectionStart();
             int end = noteTextArea.getSelectionEnd();
-            String selectedText = noteTextArea.getDocument().getText(start, end - start);
-            noteTextArea.getDocument().insertString(end, "</span>", null);
-            noteTextArea.getDocument().insertString(start, "<span style=\"" + style + "\">", null);
-        } catch (BadLocationException ex) {
+            if (start != end) {
+                HTMLDocument doc = (HTMLDocument) noteTextArea.getDocument();
+                Element root = doc.getDefaultRootElement();
+                Element startElement = root.getElement(root.getElementIndex(start));
+                Element endElement = root.getElement(root.getElementIndex(end - 1));
+
+                for (int i = startElement.getElementIndex(start); i <= endElement.getElementIndex(end - 1); i++) {
+                    Element element = startElement.getElement(i);
+                    String existingStyle = element.getAttributes().getAttribute(HTML.Tag.SPAN) != null ?
+                            element.getAttributes().getAttribute(HTML.Tag.SPAN).toString() : "";
+                    if (existingStyle.isEmpty()) {
+                        existingStyle = "style=\"" + styleAttribute + ":" + styleValue + ";\"";
+                    } else {
+                        if (!existingStyle.contains(styleAttribute)) {
+                            existingStyle = existingStyle.substring(0, existingStyle.length() - 1) + ";" + styleAttribute + ":" + styleValue + "\"";
+                        } else {
+                            String[] styles = existingStyle.split(";");
+                            StringBuilder newStyle = new StringBuilder("style=\"");
+                            for (String style : styles) {
+                                if (style.contains(styleAttribute)) {
+                                    style = styleAttribute + ":" + styleValue;
+                                }
+                                newStyle.append(style).append(";");
+                            }
+                            existingStyle = newStyle.substring(0, newStyle.length() - 1) + "\"";
+                        }
+                    }
+
+                    String finalExistingStyle = existingStyle;
+
+                    doc.setCharacterAttributes(element.getStartOffset(), element.getEndOffset() - element.getStartOffset(),
+                            new SimpleAttributeSet() {{
+                                addAttribute(HTML.Tag.SPAN, finalExistingStyle); // Используем копию
+                            }},
+                            false
+                    );
+                }
+            }
+        } catch (Exception ex) {
             ex.printStackTrace();
         }
     }
 
-    // Метод для вставки изображения
     private void insertImage() {
         JFileChooser fileChooser = new JFileChooser();
         fileChooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
@@ -220,9 +285,7 @@ public class NoteApplication extends JFrame {
         if (result == JFileChooser.APPROVE_OPTION) {
             File selectedFile = fileChooser.getSelectedFile();
             try {
-                // Получаем base64 представление изображения
                 String base64Image = Base64.getEncoder().encodeToString(Files.readAllBytes(selectedFile.toPath()));
-                // Вставляем изображение в формате HTML
                 noteTextArea.getDocument().insertString(noteTextArea.getCaretPosition(), "<img src='data:image/png;base64," + base64Image + "'/>", null);
             } catch (IOException | BadLocationException ex) {
                 ex.printStackTrace();
@@ -237,6 +300,12 @@ public class NoteApplication extends JFrame {
             updateNotesList();
             notesList.setSelectedValue(newNote, true);
         }
+    }
+
+    private JScrollPane createScrollPane(Component component) {
+        JScrollPane scrollPane = new JScrollPane(component);
+        scrollPane.setPreferredSize(new Dimension(300, 400));
+        return scrollPane;
     }
 
     private void editSelectedNote() {

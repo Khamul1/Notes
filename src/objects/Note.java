@@ -10,7 +10,6 @@ public class Note implements INote, Serializable {
     private String text;
     private LocalDateTime createAt;
     private LocalDateTime changedAt;
-    private java.lang.String text1;
 
     public Note(String text) {
         this.text = text;
@@ -57,6 +56,6 @@ public class Note implements INote, Serializable {
 
     @Override
     public String toString() {
-        return text1;
+        return getText();
     }
 }
